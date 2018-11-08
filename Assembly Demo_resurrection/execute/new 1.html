@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='vendor/three.js/build/three.js'></script>
+<script src="vendor/three.js/examples/js/libs/stats.min.js"></script>
+<!-- jsartookit -->
+<script src="../vendor/jsartoolkit5/build/artoolkit.min.js"></script>
+<script src="../vendor/jsartoolkit5/js/artoolkit.api.js"></script>
+<!-- include threex.artoolkit -->
+<script src="../src/threex/threex-artoolkitsource.js"></script>
+<script src="../src/threex/threex-artoolkitcontext.js"></script>
+<script src="../src/threex/threex-arbasecontrols.js"></script>
+<script src="../src/threex/threex-armarkercontrols.js"></script> 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/88/three.min.js"></script>
+<script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+<script src="https://jyunming-chen.github.io/tutsplus/js/KeyboardState.js"></script>
+<script src="https://rawgit.com/jyunming-chen/tutsplus/master/js/text2D.js"></script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="https://rawgit.com/mrdoob/three.js/master/examples/js/loaders/MTLLoader.js"></script>
+<script src="https://rawgit.com/mrdoob/three.js/master/examples/js/loaders/OBJLoader.js"></script>
+<script type="text/javascript">
+  document.oncontextmenu = function() {
+    return false;
+  }
+</script>
+<script src="https://jyunming-chen.github.io/tutsplus/js/KeyboardState.js"></script>
+<script src="AH.js"></script>
+<script src="BH.js"></script>
+<script src="TP.js"></script>
+<!-- ar.js -->
+<!--<script src="vendor/three.js/build/ar.js"></script>-->
+<script>THREEx.ArToolkitContext.baseURL = '../'</script>
+
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'>
+<!--<div id='ratio' style='font-size:2em;position:absolute;top:15vh;text-align:center;color:yellow;width:100%'>center text
+</div>-->
+
+<script>
+
+class Button {
+	constructor (size, x, y){
+		this.size = size;
+		this.centerX = x;
+		this.centerY = y;
+	}
+	d1To (v) { // 1-norm
+		return Math.abs (v[0]-this.centerX) + Math.abs(v[1]-this.centerY);
+	}
+	d2To (v) { // 2-norm
+		return Math.sqrt ( (v[0]-this.centerX)*(v[0]-this.centerX) 
+				+ (v[1]-this.centerY)*(v[1]-this.centerY) );
+	}
+	dInfTo (v) { // inf-norm
+		return Math.max( Math.abs (v[0]-this.centerX), Math.abs(v[1]-this.centerY) )
+	}
+}
+
+var renderer, stats;
+var scene, camera, sceneHUD, cameraHUD;
+var button1,button2;
+var mesh, buttonA, buttonB, markerRoot, cubeSpin = false; 
+var arToolkitSource, arToolkitContext;
+/////////////
+var whRatio, halfW, halfH;
+var controls,meshobj;
+var pointLight;
+var FitA,FitB,FitC,FitD,Package;
+var alpha = 0;
+var move = 0,sign = 1;
+var keyboard = new KeyboardState();
+var Apos1,Apos2,Apos3,Apos4,Bpos1,Bpos2,Bpos3,Bpos4,Cpos1,Cpos2,Dpos1,Dpos2,Dpos3,Dpos4;
+var BigFitA,BigFitB;
+var star = false;
+var isclick = false;
+var targetObject;
+var spotLightHelper;
+var stepBak = false;
+var text,text2,text3,text4,text5;
+var next,previous;
+var ground;
+
+initAH();
+initBH();
+initTP();
+init();
+animate();
+
+function init() {
+	// https://stackoverflow.com/questions/9038625/detect-if-device-is-ios?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+	/*let _iOSDevice = !!navigator.platform.match(/iPhone|iPod|iPad/);
+
+	console.log ('iOS: ' + _iOSDevice)*/
+	renderer	= new THREE.WebGLRenderer({
+		antialias	: true,
+		alpha: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+ 	//renderer.setPixelRatio( 1/2 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.domElement.style.position = 'absolute'
+	renderer.domElement.style.top = '0px'
+	renderer.domElement.style.left = '0px'
+	renderer.shadowMap.enabled = true;
+	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+	document.body.appendChild( renderer.domElement );
+	
+	// width/height ratio
+	whRatio = window.innerWidth/window.innerHeight;
+	// for multi-pass rendering
+	renderer.autoClear = false;
+		
+	// init scene and camera
+	scene	= new THREE.Scene();
+	// Create a camera
+	camera = new THREE.Camera();
+	scene.add(camera);
+	
+	//For HUD
+	sceneHUD = new THREE.Scene();
+	
+	// eye-coordinate bounds
+	halfH = 10;
+	halfW = halfH * whRatio;
+	//cameraHUD = new THREE.OrthographicCamera (-halfW*0.8,halfW*0.8, halfH,-halfH, -10,10);//PC chrome iphone6/7/8模擬器
+	cameraHUD = new THREE.OrthographicCamera (-halfW*0.9,halfW*0.9, halfH*1.2,-halfH*1.2, -10,10);//HTC手機
+	
+	// eye-coordinate bounds
+	halfH = 10;
+	halfW = halfH * whRatio;
+	
+	////////////////////////////////////////////////////////////////////////////////
+	//          handle arToolkitSource
+	////////////////////////////////////////////////////////////////////////////////
+
+	arToolkitSource = new THREEx.ArToolkitSource({
+		// to read from the webcam 
+		sourceType : 'webcam',
+
+		// to read from an image
+		// sourceType : 'image',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/images/img.jpg',		
+
+		// to read from a video
+		// sourceType : 'video',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/videos/headtracking.mp4',		
+	})
+
+	arToolkitSource.init(function onReady(){
+		onResize()
+	})
+	
+	////////////////////////////////////////////////////////////////////////////////
+	//          initialize arToolkitContext
+	////////////////////////////////////////////////////////////////////////////////
+	// create atToolkitContext
+	arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: THREEx.ArToolkitContext.baseURL + '../data/data/camera_para.dat',
+		detectionMode: 'mono',
+		maxDetectionRate: 30,
+		canvasWidth: 80*3,
+		canvasHeight: 60*3,
+	})
+	// initialize it
+	arToolkitContext.init(function onCompleted(){
+		// copy projection matrix to camera
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	})
+	
+	////////////////////////////////////////////////////////////////////////////////
+	//          Create a ArMarkerControls
+	////////////////////////////////////////////////////////////////////////////////
+	markerRoot = new THREE.Group
+	scene.add(markerRoot)
+	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+		type : 'pattern',
+		patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/patt.hiro'
+		// patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/patt.kanji'
+	})
+	//////////////////////////////////////////////////////////////////////////////////
+	//		render the whole thing on the page
+	//////////////////////////////////////////////////////////////////////////////////
+	
+	// handle resize
+	window.addEventListener('resize', function(){
+		onResize()
+	})
+	////////////////////////////////////////////////////
+	// create a button to toggle rotation
+	//
+	var buttonSize = halfH/3.5;
+	buttonA = new THREE.Mesh (new THREE.PlaneGeometry(buttonSize, buttonSize),
+			new THREE.MeshBasicMaterial({color: 0xff3a1c, transparent:true}));	
+	button1 = new Button (buttonSize, halfW-buttonSize*2, -halfH/2);
+	buttonA.position.set (button1.centerX, button1.centerY, 0);
+	sceneHUD.add (buttonA);
+	
+	next = new THREE.Mesh( new THREE.PlaneGeometry(buttonSize, buttonSize),
+	new THREE.MeshBasicMaterial({
+			map: new THREE.TextureLoader().load('https://i.imgur.com/uw6kPEb.png'),
+			transparent: true,
+			side: THREE.DoubleSide,
+			color: 0xffffff
+	}));
+	next.position.set (button1.centerX, button1.centerY, 0);
+	sceneHUD.add (next);
+	
+	buttonB = new THREE.Mesh (new THREE.PlaneGeometry(buttonSize, buttonSize),
+			new THREE.MeshBasicMaterial({color: 0x4286f4, transparent:true}));	
+	button2 = new Button (buttonSize, -halfW+buttonSize*2, -halfH/2);
+	buttonB.position.set (button2.centerX, button2.centerY, 0);
+	sceneHUD.add (buttonB);
+	
+	previous = new THREE.Mesh( new THREE.PlaneGeometry(buttonSize, buttonSize),
+	new THREE.MeshBasicMaterial({
+			map: new THREE.TextureLoader().load('https://i.imgur.com/4jB1x5i.png'),
+			transparent: true,
+			side: THREE.DoubleSide,
+			color: 0xffffff
+	}));
+	previous.position.set (button2.centerX, button2.centerY, 0);
+	sceneHUD.add (previous);
+	///////////////////////////////////////////////////
+	//for click
+	//window.addEventListener('mousedown', onMouseDown, false);
+	//window.addEventListener('mouseup', onMouseUp, false); 
+	document.addEventListener('touchstart', onDocumentTouchStart, false);
+	document.addEventListener('touchend', onDocumentTouchEnd, false);
+	////////////////////////////light/////////////////////////////////////
+	var light = new THREE.AmbientLight( 0x404040 ); // soft white light
+	markerRoot.add( light );
+	var spotLight = new THREE.SpotLight( 0xffffff ,1.0 );
+	//spotLight.position.set( 60, 120, 80);
+	spotLight.position.set( 0, 15, 5);
+	markerRoot.add(spotLight);
+	targetObject = new THREE.Object3D();
+	targetObject.position.set(0,0,0);
+	markerRoot.add(targetObject);
+	spotLight.target = targetObject;
+	spotLight.shadow.mapSize.set(1024,1024);
+	spotLight.castShadow = true;
+	
+	var spotLight2 = new THREE.SpotLight( 0xffffff ,1.5 );
+	spotLight2.position.set( -100, -120, -80);
+	markerRoot.add(spotLight2);
+	spotLight2.target = targetObject;
+	
+	spotLightHelper = new THREE.SpotLightHelper( spotLight );
+	var spotLightHelper2 = new THREE.SpotLightHelper( spotLight2 );
+	//markerRoot.add( spotLightHelper);
+	//markerRoot.add( spotLightHelper2);
+	//////////////////////////////////////////////////////////////////////
+	var shdmtl = new THREE.ShadowMaterial();
+	ground = new THREE.Mesh(new THREE.PlaneGeometry( 15, 15, 256,256),shdmtl);	
+	ground.rotation.x -= Math.PI/2;
+	ground.position.set(0,0.001,0);
+	ground.castShadow = true;
+	ground.receiveShadow = true;
+	markerRoot.add(ground);
+	//////////////////////////////////////////////////////////////////////
+	BigFitA = new THREE.Object3D();
+	BigFitB = new THREE.Object3D();
+	
+	FitA = unitize(returnAH(),3.192307692307693);//缺口在上H
+	FitB = unitize(returnBH(),3.192307692307693);//缺口在下H
+	FitC = unitize(returnTP(),2);//椅板
+	FitD = unitize(returnPIN(),1.2578125);//pin
+	
+	FitA.traverse (
+		function(mesh) {
+			if (mesh instanceof THREE.Mesh) {
+				mesh.castShadow = true;
+				mesh.receiveShadow = true;
+			}
+	});
+	FitB.traverse (
+		function(mesh) {
+			if (mesh instanceof THREE.Mesh) {
+				mesh.castShadow = true;
+				mesh.receiveShadow = true;
+			}
+	});
+	FitC.traverse (
+		function(mesh) {
+			if (mesh instanceof THREE.Mesh) {
+				mesh.castShadow = true;
+				mesh.receiveShadow = true;
+			}
+	});
+	FitD.traverse (
+		function(mesh) {
+			if (mesh instanceof THREE.Mesh) {
+				mesh.castShadow = true;
+				mesh.receiveShadow = true;
+			}
+	});
+	
+	Package = new THREE.Object3D();
+	Package.position.y += 1.769230769230768;
+	Package.add (BigFitA,BigFitB,FitC,FitD);
+	
+	FitD.children[0].children[0].rotation.x = Math.PI/2;
+	FitD.children[0].children[1].rotation.x = Math.PI/2;
+	FitD.children[0].children[2].rotation.x = Math.PI/2;
+	FitD.children[0].children[3].rotation.x = Math.PI/2;
+	
+	FitD.children[0].children[0].position.set(-20.3125,0,0);
+	FitD.children[0].children[1].position.set(-6.77,0,0);
+	FitD.children[0].children[2].position.set(6.77,0,0);
+	FitD.children[0].children[3].position.set(20.3125,0,0);
+	
+	markerRoot.add (Package);
+	
+	
+	FitA.rotation.x = -Math.PI/2;
+	FitB.rotation.x = -Math.PI/2;
+	/////////////////////////////for rotation H////////////////////////
+
+	BigFitA.add(FitA);
+	BigFitA.position.set(-2.75,0,1);
+	BigFitA.position.y = -0.1730769230769213;
+	FitA.position.y = -1.3625;
+	
+	BigFitB.add(FitB);
+	BigFitB.position.set(2.75,0,1);
+	BigFitB.position.y = -0.1730769230769213;
+	FitB.position.y = -1.365384615384615;
+
+	/////////////////////////////pin////////////////////////
+	FitD.position.set(0,-1.653846153846153,2.5);
+	
+	/////////////////////////////for lerp/////////////////////////////
+	FitC.position.y = -1.711538461538461;
+	/*Dpos1 = new THREE.Vector3(0,-1.323076923076922,2);
+	Dpos2 = new THREE.Vector3(0,0,2);
+	Dpos3 = new THREE.Vector3(0,0,0);
+	Dpos4 = new THREE.Vector3(0,-1.3230769230769222,0);*/
+	
+	D1pos1 = new THREE.Vector3(-16.25,0,0);
+	D2pos1 = new THREE.Vector3(-5.416,0,0);
+	D3pos1 = new THREE.Vector3(5.416,0,0);
+	D4pos1 = new THREE.Vector3(16.25,0,0);
+	
+	D1pos2 = new THREE.Vector3(-16.25,16.25,0);
+	D2pos2 = new THREE.Vector3(-5.416,16.25,0);
+	D3pos2 = new THREE.Vector3(5.416,16.25,0);
+	D4pos2 = new THREE.Vector3(16.25,16.25,0);
+	
+	D1pos3 = new THREE.Vector3(-7.5,16.25,-39.45);
+	D2pos3 = new THREE.Vector3(7.5,16.25,-24.9);
+	D3pos3 = new THREE.Vector3(-7.5,16.25,-24.9);
+	D4pos3 = new THREE.Vector3(7.5,16.25,-39.45);
+	
+	D1pos4 = new THREE.Vector3(-7.5,2,-39.45);
+	D2pos4 = new THREE.Vector3(7.5,2,-24.9);
+	D3pos4 = new THREE.Vector3(-7.5,2,-24.9);
+	D4pos4 = new THREE.Vector3(7.5,2,-39.45);
+	
+	Bpos1 = new THREE.Vector3(0,-1.365384615384615,0);
+	Bpos2 = new THREE.Vector3(0,-3.125,-1);
+	Bpos3 = new THREE.Vector3(2.75,-3.125,-1);
+	Bpos4 = new THREE.Vector3(2.75,-1.875,-1);
+	
+	
+	Apos1 = new THREE.Vector3(0,-1.365384615384615,0);
+	Apos2 = new THREE.Vector3(0,-4,-1);
+	Apos3 = new THREE.Vector3(-2.75,-4,-1);
+	Apos4 = new THREE.Vector3(-2.75,-1.875,-1);
+	/////////////////////////////Step point/////////////////////////////
+	var Text2D = THREE_Text.MeshText2D;
+	var textAlign = THREE_Text.textAlign;
+
+	text = new Text2D("Step 1", {
+	align: textAlign.center,
+	font: '360px Times',
+	fillStyle: '#ff3030',
+	antialias: false
+	});
+	text.position.set(0, halfH/1.5, 0);
+	text.scale.set(0.008, 0.008, 0.008);
+	
+	text2 = new Text2D("Step 2", {
+	align: textAlign.center,
+	font: '360px Times',
+	fillStyle: '#ff3030',
+	antialias: false
+	});
+	text2.position.set(0, halfH/1.5, 0);
+	text2.scale.set(0.008, 0.008, 0.008);
+	
+	text3 = new Text2D("Step 3", {
+	align: textAlign.center,
+	font: '360px Times',
+	fillStyle: '#ff3030',
+	antialias: false
+	});
+	text3.position.set(0, halfH/1.5, 0);
+	text3.scale.set(0.008, 0.008, 0.008);
+	
+	text4 = new Text2D("Step 4", {
+	align: textAlign.center,
+	font: '360px Times',
+	fillStyle: '#ff3030',
+	antialias: false
+	});
+	text4.position.set(0, halfH/1.5, 0);
+	text4.scale.set(0.008, 0.008, 0.008);
+	
+	text5 = new Text2D("Done !!", {
+	align: textAlign.center,
+	font: '360px Times',
+	fillStyle: '#ff3030',
+	antialias: false
+	});
+	text5.position.set(0, halfH/1.5, 0);
+	text5.scale.set(0.008, 0.008, 0.008);
+	
+	sceneHUD.add(text,text2,text3,text4,text5);
+	
+}
+
+function animate() {
+	requestAnimationFrame (animate);
+	if( arToolkitSource.ready === false )	return
+	arToolkitContext.update( arToolkitSource.domElement )
+	
+	renderer.clear();
+	renderer.render (scene, camera);
+	renderer.render (sceneHUD, cameraHUD);
+	FitA.visible = markerRoot.visible;
+	FitB.visible = markerRoot.visible;
+	FitC.visible = markerRoot.visible;
+	FitD.visible = markerRoot.visible;
+		
+	//組裝動畫
+	if (alpha <= 1 && star) 
+		alpha += 0.015*sign;
+		
+	if(move === 0){//初始化
+		text.visible = false;
+		text2.visible = false;
+		text3.visible = false;
+		text4.visible = false;
+		text5.visible = false;
+		FitA.visible = true;
+		FitB.visible = true;
+		FitC.visible = true;
+		FitD.visible = true;
+		Package.rotation.x = 0;
+		FitD.children[0].children[0].position.copy(D1pos1);
+		FitD.children[0].children[1].position.copy(D2pos1);
+		FitD.children[0].children[2].position.copy(D3pos1);
+		FitD.children[0].children[3].position.copy(D4pos1);
+		FitD.children[0].children[0].rotation.x = Math.PI/2;
+		FitD.children[0].children[1].rotation.x = Math.PI/2;
+		FitD.children[0].children[2].rotation.x = Math.PI/2;
+		FitD.children[0].children[3].rotation.x = Math.PI/2;
+		FitB.position.copy (Bpos1);
+		BigFitB.rotation.z = 0;
+		FitB.rotation.x = -Math.PI/2;
+		FitB.rotation.y = 0;
+		FitA.position.copy (Apos1);
+		BigFitA.rotation.z = 0;
+		FitA.rotation.x = -Math.PI/2;
+		FitA.rotation.y = 0;
+		if(isclick) move += 1;
+	}
+	if(move === 1){//D開始
+		if(stepBak && FitD.children[0].children[0].rotation.x === 0){
+			text.visible = true;
+			text2.visible = false;
+			text3.visible = false;
+			text4.visible = false;
+			text5.visible = false;
+			Package.rotation.x = 0;
+			FitD.children[0].children[0].position.copy(D1pos1);
+			FitD.children[0].children[1].position.copy(D2pos1);
+			FitD.children[0].children[2].position.copy(D3pos1);
+			FitD.children[0].children[3].position.copy(D4pos1);
+			FitD.children[0].children[0].rotation.x = Math.PI/2;
+			FitD.children[0].children[1].rotation.x = Math.PI/2;
+			FitD.children[0].children[2].rotation.x = Math.PI/2;
+			FitD.children[0].children[3].rotation.x = Math.PI/2;
+			FitB.position.copy (Bpos1);
+			BigFitB.rotation.z = 0;
+			FitB.rotation.x = -Math.PI/2;
+			FitB.rotation.y = 0;
+			FitA.position.copy (Apos1);
+			BigFitA.rotation.z = 0;
+			FitA.rotation.x = -Math.PI/2;
+			FitA.rotation.y = 0;
+		}
+		text.visible = true;
+		text2.visible = false;
+		text3.visible = false;
+		text4.visible = false;
+		text5.visible = false;
+		if(FitD.children[0].children[0].rotation.x < Math.PI)FitD.children[0].children[0].rotation.x += 0.01;
+		if(FitD.children[0].children[1].rotation.x < Math.PI)FitD.children[0].children[1].rotation.x += 0.01;
+		if(FitD.children[0].children[2].rotation.x < Math.PI)FitD.children[0].children[2].rotation.x += 0.01;
+		if(FitD.children[0].children[3].rotation.x < Math.PI)FitD.children[0].children[3].rotation.x += 0.01;
+		if(FitD.children[0].children[0].rotation.x >= Math.PI){
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 2){
+		star = true;
+		var pp = D1pos1.clone();
+		pp.lerp (D1pos2, alpha);
+		FitD.children[0].children[0].position.copy (pp);	
+		var pp2 = D2pos1.clone();
+		pp2.lerp (D2pos2, alpha);
+		FitD.children[0].children[1].position.copy (pp2);	
+		if((FitD.children[0].children[0].position.y - D1pos2.y) > -0.01) {
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 3){
+		var pp = D1pos2.clone();
+		pp.lerp (D1pos3, alpha);
+		FitD.children[0].children[0].position.copy (pp);
+		var pp2 = D2pos2.clone();
+		pp2.lerp (D2pos3, alpha);
+		FitD.children[0].children[1].position.copy (pp2);
+		if((FitD.children[0].children[0].position.x - D1pos3.x) > -0.01) {
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 4){
+		var pp = D1pos3.clone();
+		pp.lerp (D1pos4, alpha);
+		FitD.children[0].children[0].position.copy (pp);
+		var pp2 = D2pos3.clone();
+		pp2.lerp (D2pos4, alpha);
+		FitD.children[0].children[1].position.copy (pp2);
+		if((FitD.children[0].children[0].position.y - D1pos4.y) < 0.01) {
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 5){
+		var pp = D3pos1.clone();
+		pp.lerp (D3pos2, alpha);
+		FitD.children[0].children[2].position.copy (pp);	
+		var pp2 = D4pos1.clone();
+		pp2.lerp (D4pos2, alpha);
+		FitD.children[0].children[3].position.copy (pp2);	
+		if((FitD.children[0].children[2].position.y - D3pos2.y) > -0.01) {
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 6){
+		var pp = D3pos2.clone();
+		pp.lerp (D3pos3, alpha);
+		FitD.children[0].children[2].position.copy (pp);
+		var pp2 = D4pos2.clone();
+		pp2.lerp (D4pos3, alpha);
+		FitD.children[0].children[3].position.copy (pp2);
+		if((FitD.children[0].children[3].position.x - D4pos3.x) < 0.01) {
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 7){//D結束
+		if(stepBak){
+			text.visible = false;
+			text2.visible = true;
+			text3.visible = false;
+			text4.visible = false;
+			text5.visible = false;
+			Package.rotation.x = 0;
+			FitB.position.copy (Bpos1);
+			BigFitB.rotation.z = 0;
+			FitB.rotation.x = -Math.PI/2;
+			FitB.rotation.y = 0;
+			FitA.position.copy (Apos1);
+			BigFitA.rotation.z = 0;
+			FitA.rotation.x = -Math.PI/2;
+			FitA.rotation.y = 0;
+		}
+		var pp = D3pos3.clone();
+		pp.lerp (D3pos4, alpha);
+		FitD.children[0].children[2].position.copy (pp);
+		var pp2 = D4pos3.clone();
+		pp2.lerp (D4pos4, alpha);
+		FitD.children[0].children[3].position.copy (pp2);
+		if(((FitD.children[0].children[3].position.y - D4pos4.y) < 0.01) && isclick) {
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 8){//B開始
+		text.visible = false;
+		text2.visible = true;
+		text3.visible = false;
+		text4.visible = false;
+		text5.visible = false;
+		if(FitB.rotation.x < 0) FitB.rotation.x += 0.01;
+		if(FitB.rotation.x >= 0 && BigFitB.rotation.z > -Math.PI) BigFitB.rotation.z -= 0.025;
+		if(BigFitB.rotation.z + Math.PI < 0.01) {
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 9){
+		var pp = Bpos1.clone();
+		pp.lerp (Bpos2, alpha);
+		FitB.position.copy (pp);
+		if((FitB.position.y - Bpos2.y) < 0.01) {
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 10){
+		var pp = Bpos2.clone();
+		pp.lerp (Bpos3, alpha);
+		FitB.position.copy (pp);
+		if((FitB.position.x - Bpos3.x) > -0.01) {
+			if(FitB.rotation.y > -Math.PI/4)
+				FitB.rotation.y -=0.005;
+			if(FitB.rotation.y <= -Math.PI/4) {
+				move += 1;
+				alpha = 0;
+			}
+		}
+	}
+	if(move === 11){//B結束
+		if(stepBak){
+			text.visible = false;
+			text2.visible = false;
+			text3.visible = true;
+			text4.visible = false;
+			text5.visible = false;
+			Package.rotation.x = 0;
+			FitA.position.copy (Apos1);
+			BigFitA.rotation.z = 0;
+			FitA.rotation.x = -Math.PI/2;
+			FitA.rotation.y = 0;
+		}
+		var pp = Bpos3.clone();
+		pp.lerp (Bpos4, alpha);
+		FitB.position.copy (pp);
+		if(((FitB.position.y - Bpos4.y) > -0.01) && isclick) {
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 12){//A開始
+		text.visible = false;
+		text2.visible = false;
+		text3.visible = true;
+		text4.visible = false;
+		text5.visible = false;
+		if(FitA.rotation.x < 0) FitA.rotation.x += 0.01;
+		if(FitA.rotation.x >= 0 && BigFitA.rotation.z < Math.PI) BigFitA.rotation.z += 0.025;
+		if(BigFitA.rotation.z - Math.PI > -0.01){
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 13){
+		var pp = Apos1.clone();
+		pp.lerp (Apos2, alpha);
+		FitA.position.copy (pp);	
+		if((FitA.position.y - Apos2.y) < 0.01) {
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 14){
+		var pp = Apos2.clone();
+		pp.lerp (Apos3, alpha);
+		FitA.position.copy (pp);
+		if((FitA.position.x - Apos3.x) < 0.01) {
+			if(FitA.rotation.y < Math.PI/4)
+				FitA.rotation.y +=0.005;
+			if(FitA.rotation.y >= Math.PI/4){
+				move += 1;
+				alpha = 0;
+			}
+		}
+	}
+	if(move === 15){//A結束
+		if(stepBak){
+			text.visible = false;
+			text2.visible = false;
+			text3.visible = false;
+			text4.visible = true;
+			text5.visible = false;
+			Package.rotation.x = 0;
+		}
+		var pp = Apos3.clone();
+		pp.lerp (Apos4, alpha);
+		FitA.position.copy (pp);
+		if(((FitA.position.y - Apos4.y) > -0.01) && isclick) {
+			move += 1;
+			alpha = 0;
+		}
+	}
+	if(move === 16){
+		text.visible = false;
+		text2.visible = false;
+		text3.visible = false;
+		text4.visible = true;
+		text5.visible = false;
+		if(Package.rotation.x < Math.PI) Package.rotation.x += 0.01;
+		if(Package.rotation.x >= Math.PI){
+			text.visible = false;
+			text2.visible = false;
+			text3.visible = false;
+			text4.visible = false;
+			text5.visible = true;
+		}
+	}
+	
+	console.log(move);
+}
+	
+function onResize(){
+	arToolkitSource.onResize()	
+	arToolkitSource.copySizeTo(renderer.domElement)	
+	if( arToolkitContext.arController !== null ){
+		arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)	
+	}	
+	
+	whRatio = window.innerWidth/window.innerHeight;
+	 halfW = halfH * whRatio;
+	//$('#ratio').text ('W/H ratio: ' + whRatio.toFixed(2))
+	
+}
+	
+function pickCompute (ndcX, ndcY) {
+
+	// use 2D algorithm 	
+	let dist = button1.dInfTo ([halfW * ndcX, halfH * ndcY]);
+	//$('#ratio').text ('Mouse-to-Button: ' + dist.toFixed(2))
+	/*if (dist < button1.size/2) {
+		console.log ('picked')
+		isclick = true;
+	} else {
+		console.log ('no hit')
+	}*/
+	/*if (ndcX >= 583 && ndcX <= 650 && ndcY >= 275 && ndcY <= 342) {//PC chrome iphone6/7/8模擬器
+		console.log ('picked')
+		isclick = true;
+	} 
+	else if (ndcX >= 17 && ndcX <= 84 && ndcY >= 275 && ndcY <= 342) {
+		console.log ('picked')
+		stepBak = true;
+		if(move === 7) move = 0;
+		else if(move === 11) move = 7;
+		else if(move === 15) move = 11;
+		else if(move === 16) move = 15;
+	} 
+	else {
+		console.log ('no hit')
+	}*/
+	
+	if (ndcX >= 660 && ndcX <= 710 && ndcY >= 260 && ndcY <= 320) {//HTC手機
+		console.log ('picked')
+		isclick = true;
+	} 
+	else if (ndcX >= 40 && ndcX <= 90 && ndcY >= 260 && ndcY <= 320) {
+		console.log ('picked')
+		stepBak = true;
+		if(move === 7) move = 0;
+		else if(move === 11) move = 7;
+		else if(move === 15) move = 11;
+		else if(move === 16) move = 15;
+	} 
+	else {
+		console.log ('no hit')
+	}
+
+}
+
+function onMouseDown (event) {
+	console.log ('in mouse down')
+	event.preventDefault();
+	if(isclick === true) buttonA.material.color.set(0xff891c);
+	if(stepBak === true) buttonB.material.color.set(0x87dbff);
+	pickCompute (event.clientX, event.clientY);
+}	
+
+function onMouseUp() {
+	console.log ('mouse up')
+	isclick = false;
+	stepBak = false;
+	buttonA.material.color.set(0xff3a1c);
+	buttonB.material.color.set(0x4286f4);
+	
+}
+
+
+function onDocumentTouchStart (event) {
+	console.log ('in touch start');
+	if(isclick === true) buttonA.material.color.set(0xff891c);
+	if(stepBak === true) buttonB.material.color.set(0x87dbff);
+   if (event.touches.length == 1) {
+		event.preventDefault();
+		pickCompute (event.touches[0].pageX, event.touches[0].pageY);
+		if(isclick === true) buttonA.material.color.set(0xff891c);	
+		if(stepBak === true) buttonB.material.color.set(0x87dbff);		
+	}
+}
+function  onDocumentTouchEnd() {
+	console.log ('touch end');
+	isclick = false;
+	stepBak = false;
+	buttonA.material.color.set(0xff3a1c);
+	buttonB.material.color.set(0x4286f4);
+}
+
+function unitize (object, targetSize) {
+	
+	// find bounding box of 'object'
+	var box3 = new THREE.Box3();
+	box3.setFromObject (object);
+	var size = new THREE.Vector3();
+	size.subVectors (box3.max, box3.min);
+	var center = new THREE.Vector3();
+	center.addVectors(box3.max, box3.min).multiplyScalar (0.5);
+	
+	console.log ('center: ' + center.x + ', '+center.y + ', '+center.z );
+	console.log ('size: ' + size.x + ', ' +  size.y + ', '+size.z );
+	
+	// uniform scaling according to objSize
+	var objSize = findMax (size);
+	var scaleSet = targetSize/objSize;
+				
+	var theObject =  new THREE.Object3D();
+	theObject.add (object);
+	object.scale.set (scaleSet, scaleSet, scaleSet);
+	object.position.set (-center.x*scaleSet, -center.y*scaleSet + size.y/2*scaleSet, -center.z*scaleSet);
+
+	
+	return theObject;
+	
+	
+	// helper function
+	function findMax(v) {
+		if (v.x > v.y) {
+			return v.x > v.z ? v.x : v.z;
+		} else { // v.y > v.x
+			return v.y > v.z ? v.y : v.z;
+		} 
+	}
+			
+}
+</script>
+</body>

@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='vendor/three.js/build/three.js'></script>
+<script src="vendor/three.js/examples/js/libs/stats.min.js"></script>
+<!-- jsartookit -->
+<script src="../vendor/jsartoolkit5/build/artoolkit.min.js"></script>
+<script src="../vendor/jsartoolkit5/js/artoolkit.api.js"></script>
+<!-- include threex.artoolkit -->
+<script src="../src/threex/threex-artoolkitsource.js"></script>
+<script src="../src/threex/threex-artoolkitcontext.js"></script>
+<script src="../src/threex/threex-arbasecontrols.js"></script>
+<script src="../src/threex/threex-armarkercontrols.js"></script> 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/88/three.min.js"></script>
+<script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+<script src="https://jyunming-chen.github.io/tutsplus/js/KeyboardState.js"></script>
+<script src="https://rawgit.com/jyunming-chen/tutsplus/master/js/text2D.js"></script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="https://rawgit.com/mrdoob/three.js/master/examples/js/loaders/MTLLoader.js"></script>
+<script src="https://rawgit.com/mrdoob/three.js/master/examples/js/loaders/OBJLoader.js"></script>
+<script type="text/javascript">
+  document.oncontextmenu = function() {
+    return false;
+  }
+</script>
+<!-- ar.js -->
+<!--<script src="vendor/three.js/build/ar.js"></script>-->
+<script>THREEx.ArToolkitContext.baseURL = '../'</script>
+
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'>
+<!--<div id='ratio' style='font-size:2em;position:absolute;top:15vh;text-align:center;color:yellow;width:100%'>center text
+</div>-->
+<script>
+
+class Button {
+	constructor (size, x, y){
+		this.size = size;
+		this.centerX = x;
+		this.centerY = y;
+	}
+	d1To (v) { // 1-norm
+		return Math.abs (v[0]-this.centerX) + Math.abs(v[1]-this.centerY);
+	}
+	d2To (v) { // 2-norm
+		return Math.sqrt ( (v[0]-this.centerX)*(v[0]-this.centerX) 
+				+ (v[1]-this.centerY)*(v[1]-this.centerY) );
+	}
+	dInfTo (v) { // inf-norm
+		return Math.max( Math.abs (v[0]-this.centerX), Math.abs(v[1]-this.centerY) )
+	}
+}
+
+var renderer, stats;
+var scene, camera, sceneHUD, cameraHUD;
+var mesh, button, markerRoot, cubeSpin = false; 
+var arToolkitSource, arToolkitContext;
+/////////////
+var whRatio, halfW, halfH;
+var button1,buttonRing;
+var mball,mball2D;
+var mballObj = new THREE.Object3D();
+var origin, pointer;
+var gravity, pos, vel;
+var t = 0,y = 0;//for physical compute
+var iscatch = false;
+var increaseV0 = false;
+var normal = 0;
+var bar,barR,barCass1,barCass2,barCass3;
+var barX,barY,barL,barW;
+var temp;
+var mball2D_show = true,mball_show = false,isclick = false;
+var str = 0.1;
+var rotateAxis = new THREE.Vector3(1,1,1);
+var hide = false , rota = false , move = true;
+var directionalLight,directionalLight2;
+var pikachu,pikachuObj;
+var amblight;
+var ground;
+var grassL,grassR,grassObj,k = 1,mballposcy,caught,fail;
+var time,gamestar = false;
+var starbackground,starbackground2;
+
+init();
+animate();
+
+function newpokemon(){
+	pikachuObj = new THREE.Object3D();
+	pikachu = new THREE.Object3D();
+	markerRoot.add(pikachuObj);
+	var onProgress = function(xhr) {
+    if (xhr.lengthComputable) {
+      var percentComplete = xhr.loaded / xhr.total * 100;
+      console.log(Math.round(percentComplete, 2) + '% downloaded');
+    }
+	  };
+
+	  var onError = function(xhr) {};
+
+	  var mtlLoader = new THREE.MTLLoader();
+		console.log("mtl weeeeee");
+		mtlLoader.setPath('model/PIKACHU/');
+		console.log("mtl weeeeee");
+		mtlLoader.load('pikachu-pokemon-go.mtl', function(materials) {
+		console.log("mtl weeeeee");
+		materials.preload();
+		var objLoader = new THREE.OBJLoader();
+		objLoader.setMaterials(materials);
+		objLoader.setPath('model/PIKACHU/');
+		objLoader.load('pikachu-pokemon-go.obj', function(object) {
+				console.log("obj yeeeeee");
+				pikachu =  unitize (object, 1);
+				pikachuObj.add(pikachu);
+				//markerRoot.add(pikachu);
+				pikachu.position.set(0,0,0);
+				pikachu.rotation.y = -Math.PI/3 + Math.PI;
+				//////// MATERIAL ADJUSTMENT for porsche ///////////////
+				// transparent window: double-side fix
+				/*object.traverse (
+					function(mesh) {
+						if (mesh instanceof THREE.Mesh) {
+							mesh.material.side = THREE.DoubleSide;
+							mesh.castShadow = true;
+							mesh.receiveShadow = true;
+						}
+					});*/
+		}, onProgress, onError);
+	  });
+}
+function jumptoggle(){
+	if(k > 2){
+		k = 0;
+		time = 500+500*Math.random();
+		setTimeout(jumptoggle, time);
+	}
+	else{
+		k += 1;
+		time = 500+500*Math.random();
+		setTimeout(jumptoggle, time);
+	}
+}
+function rotateToggle(){
+	rota = !rota;
+}
+function moveToggle(){
+	move = !move;
+	setTimeout(rotatePoke, 150);
+}
+function jumpPoke(){
+	if(k === 0){
+		pikachu.position.x = -0.8;
+	}
+	else if(k === 1){
+		pikachu.position.x = 0;
+	}
+	else if(k === 2){
+		pikachu.position.x = 0.8;
+	}
+}
+function rotatePoke(){
+	
+	if(rota && move){
+		if(pikachu.rotation.y > -Math.PI/3 + Math.PI){
+			pikachu.rotation.y -= Math.PI/450;
+		}
+		else {
+			rotateToggle();
+		}
+	}
+	else if(move){
+		if(pikachu.rotation.y < Math.PI/3 + + Math.PI){
+			pikachu.rotation.y += Math.PI/450;
+		}
+		else {
+			rotateToggle();
+		}
+	}
+	if(pikachu.rotation.y > 3.13 && pikachu.rotation.y < 3.15){
+		setTimeout(moveToggle, 150);
+	}
+	else
+		setTimeout(rotatePoke, 1);
+}
+
+function init() {
+	// https://stackoverflow.com/questions/9038625/detect-if-device-is-ios?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+	/*let _iOSDevice = !!navigator.platform.match(/iPhone|iPod|iPad/);
+
+	console.log ('iOS: ' + _iOSDevice)*/
+	
+	
+	renderer	= new THREE.WebGLRenderer({
+		antialias	: true,
+		alpha: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+ 	//renderer.setPixelRatio( 1/2 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.domElement.style.position = 'absolute'
+	renderer.domElement.style.top = '0px'
+	renderer.domElement.style.left = '0px'
+	renderer.shadowMap.enabled = true;
+	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+	document.body.appendChild( renderer.domElement );
+	
+	// width/height ratio
+	whRatio = window.innerWidth/window.innerHeight;
+	// for multi-pass rendering
+	renderer.autoClear = false;
+		
+	// init scene and camera
+	scene	= new THREE.Scene();
+	// Create a camera
+	camera = new THREE.Camera();
+	scene.add(camera);
+	
+	// for HUD scene
+	sceneHUD = new THREE.Scene();
+	
+	// eye-coordinate bounds
+	halfH = 10;
+	halfW = halfH * whRatio;
+	//cameraHUD = new THREE.OrthographicCamera (-halfW*2.0611,halfW*2.0611, halfH*0.85,-halfH*0.85, -10,10);//PC chrome iphone6/7/8模擬器
+	cameraHUD = new THREE.OrthographicCamera (-halfW,halfW, halfH*0.85,-halfH*0.85, -10,10);//HTC手機
+	//cameraHUD.position.set (0,0,0)
+	console.log(whRatio);
+
+	////////////////////////////////////////////////////
+	// create a button to toggle rotation
+	//
+	var buttonSize = halfH/6;
+	button = new THREE.Mesh (new THREE.CircleGeometry( buttonSize, 32 ), 
+			new THREE.MeshBasicMaterial({color: 0xff3a1c, transparent:true}));	
+	buttonRing =  new THREE.Mesh( new THREE.RingGeometry( 0.6*buttonSize, buttonSize, 32 ),
+	new THREE.MeshBasicMaterial({
+			map: new THREE.TextureLoader().load('https://i.imgur.com/N8dwDCA.jpg'),
+			transparent: true,
+			side: THREE.DoubleSide,
+			color: 0xffffff
+		  }));
+	button1 = new Button (buttonSize, 0, -halfH + buttonSize*2);
+	button.position.set (button1.centerX, button1.centerY, 0);
+	buttonRing.position.set (button1.centerX, button1.centerY, 0.1);
+	sceneHUD.add (buttonRing,button);
+	
+	
+	////////////////////////////////////////////////////////////////////////////////
+	//          handle arToolkitSource
+	////////////////////////////////////////////////////////////////////////////////
+
+	arToolkitSource = new THREEx.ArToolkitSource({
+		// to read from the webcam 
+		sourceType : 'webcam',
+
+		// to read from an image
+		// sourceType : 'image',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/images/img.jpg',		
+
+		// to read from a video
+		// sourceType : 'video',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/videos/headtracking.mp4',		
+	})
+
+	arToolkitSource.init(function onReady(){
+		onResize()
+	})
+	
+	////////////////////////////////////////////////////////////////////////////////
+	//          initialize arToolkitContext
+	////////////////////////////////////////////////////////////////////////////////
+	
+
+	// create atToolkitContext
+	arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: THREEx.ArToolkitContext.baseURL + '../data/data/camera_para.dat',
+		detectionMode: 'mono',
+		maxDetectionRate: 30,
+		canvasWidth: 80*3,
+		canvasHeight: 60*3,
+	})
+	// initialize it
+	arToolkitContext.init(function onCompleted(){
+		// copy projection matrix to camera
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	})
+	
+	////////////////////////////////////////////////////////////////////////////////
+	//          Create a ArMarkerControls
+	////////////////////////////////////////////////////////////////////////////////
+	markerRoot = new THREE.Group
+	scene.add(markerRoot)
+	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+		type : 'pattern',
+		patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/pika.patt'
+		// patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/patt.kanji'
+	})
+	//////////////////////////////hide pikachu//////////////////////////////
+	grassL = new THREE.Mesh( new THREE.PlaneGeometry( 1, 1.2, 64 ),new THREE.MeshBasicMaterial({
+			map: new THREE.TextureLoader().load('https://i.imgur.com/oRYPJ5X.png'),
+			transparent: true,
+			color: 0xffffff
+			}));
+	grassObj = new THREE.Object3D();
+	grassObj.add(grassL);
+	grassL.position.set(-0.8,0.6,0.55);
+	grassR = grassL.clone();
+	grassR.position.x = 0.8;
+	grassObj.add(grassR);
+	markerRoot.add(grassObj);
+	////////////////////////////////////////////////////////////////////////////////
+	mball = new THREE.Mesh (new THREE.SphereGeometry (0.1, 20,20), new THREE.MeshBasicMaterial({
+			map: new THREE.TextureLoader().load('https://i.imgur.com/zdYJ4Z4.png'),
+			color: 0xffffff
+		  }));
+	mball.castShadow = true;
+	mball.receiveShadow = false;
+	markerRoot.add (mball);
+	
+	mball.visible = false;
+	mballposcy = mball.clone();
+	var ballsize = halfH/5;
+	mball2D = new THREE.Mesh (new THREE.SphereGeometry (ballsize, 20,20), new THREE.MeshBasicMaterial({
+			map: new THREE.TextureLoader().load('https://i.imgur.com/zdYJ4Z4.png'),
+			color: 0xffffff
+		  }));
+	mball2D.position.set (0, 0, 0);
+	mball2D.rotation.y -= Math.PI/2;
+	sceneHUD.add(mball2D);
+	mball2D.visible = false;
+	//////////////////////////////////////////////////////////////////////////////////
+	//		render the whole thing on the page
+	//////////////////////////////////////////////////////////////////////////////////
+	stats = new Stats();
+	document.body.appendChild( stats.dom );
+	
+
+	// handle resize
+	window.addEventListener('resize', function(){
+		onResize()
+	})
+	//window.addEventListener ('mousedown', onMouseDown, false);
+	// for those with touch screen
+  	/*if (_iOSDevice) {
+  		window.addEventListener('touchstart', onTouchStart, false);
+		console.log ('touch added for iOSDevice')
+	}*/
+	origin = new THREE.Mesh (new THREE.SphereGeometry(0.05,20,20), new THREE.MeshNormalMaterial());
+	scene.add (origin)
+	pointer = new THREE.Mesh (new THREE.SphereGeometry(0.05), new THREE.MeshBasicMaterial());
+	scene.add (pointer)
+	gravity = new THREE.Vector3();
+	pos = new THREE.Vector3();
+	vel = new THREE.Vector3();
+	newpokemon();
+	//////////////////////////////蓄力//////////////////////////////
+	clock = new THREE.Clock();
+	//window.addEventListener('mousedown', onMouseDown, false);
+	//window.addEventListener('mouseup', onMouseUp, false); 
+	document.addEventListener('touchstart', onDocumentTouchStart, false);
+	document.addEventListener('touchend', onDocumentTouchEnd, false);
+	// new THREE.OrthographicCamera (-halfW*0.9,halfW*0.9, halfH*0.85,-halfH*0.85, -10,10);//HTC手機
+	barL = halfH/2;
+	barW = halfW/8;
+	bar = new THREE.Mesh (new THREE.PlaneGeometry( barW, barL, 32 ), new THREE.MeshBasicMaterial( {color: 0x1ca0ff, side: THREE.DoubleSide} ));
+	barX = halfW - 3*barW;
+	barY = -halfH + 0.8*barL;
+	bar.position.set (barX, barY, 0);
+	sceneHUD.add (bar);
+	
+	barR = new THREE.Mesh (new THREE.PlaneGeometry( barW, barL*0.053, 32 ), new THREE.MeshBasicMaterial( {color: 0xff6100, side: THREE.DoubleSide} ));
+	barR.position.set (barX, 0.85*barY, 0);
+	sceneHUD.add (barR);
+	barCass1 = new THREE.Mesh (new THREE.PlaneGeometry( barW*0.1, barL, 32 ), new THREE.MeshBasicMaterial( {color: 0xffffff, side: THREE.DoubleSide} ));
+	barCass1.position.set(barX - barW/2, barY, 0);
+	barCass2 = new THREE.Mesh (new THREE.PlaneGeometry( barW*0.1, barL, 32 ), new THREE.MeshBasicMaterial( {color: 0xffffff, side: THREE.DoubleSide} ));
+	barCass2.position.set(barX + barW/2, barY, 0);
+	barCass3 = new THREE.Mesh (new THREE.PlaneGeometry( barW, barW*0.1, 32 ), new THREE.MeshBasicMaterial( {color: 0xffffff, side: THREE.DoubleSide} ));
+	barCass3.position.set(barX, barY + barL/2 - barW*0.05, 0);
+	sceneHUD.add(barCass1,barCass2,barCass3)
+	//////////////////////////////燈光//////////////////////////////
+	directionalLight = new THREE.SpotLight( 0xaaaaaa , 1);
+	directionalLight.position.set(0,10,0)
+	directionalLight.shadow.mapSize.set(1024,1024);
+	directionalLight.shadow.camera.bottom = -100;
+	directionalLight.shadow.camera.top = 100;
+	directionalLight.shadow.camera.right = 100;
+	directionalLight.shadow.camera.left = -100;
+	directionalLight.castShadow = true;
+	directionalLight2 = directionalLight.clone();
+	directionalLight2.position.z = -10;
+	directionalLight2.castShadow = false;
+	markerRoot.add( directionalLight, directionalLight2 );
+	directionalLight.target = pikachuObj;
+	amblight = new THREE.AmbientLight( 0x101010 );
+	markerRoot.add(amblight);
+	//////////////////////////////地板//////////////////////////////
+	/*var ground = new THREE.Mesh(new THREE.PlaneGeometry( 8, 8, 32 ),new THREE.MeshBasicMaterial({
+		map: new THREE.TextureLoader().load('https://i.imgur.com/Bhyalt6.png'),
+		transparent: true,
+		side: THREE.DoubleSide,
+	}));*/
+	var shdmtl = new THREE.ShadowMaterial();
+	ground = new THREE.Mesh(new THREE.PlaneGeometry( 10, 10, 256,256),shdmtl);	
+	ground.rotation.x -= Math.PI/2;
+	ground.position.set(0,0.001,0);
+	ground.castShadow = true;
+	ground.receiveShadow = true;
+	markerRoot.add(ground);
+	
+	var groundcl = ground.clone();
+	groundcl.position.y = 0;
+	markerRoot.add(groundcl);
+	//////////////////////////////文字//////////////////////////////
+	var Text2D = THREE_Text.MeshText2D;
+	var SpriteText2D = THREE_Text.SpriteText2D;
+	var textAlign = THREE_Text.textAlign;
+
+	caught = new Text2D("Caught!", {
+	align: textAlign.center,
+	font: '75px Times',
+	fillStyle: '#ff671c',
+	antialias: false
+	});
+	caught.position.set(0, 2, 0.8);
+	caught.scale.set(0.01, 0.01, 0.01);
+	
+	grassObj.add(caught);
+	caught.visible = false;
+	
+	fail = new Text2D("Fail!", {
+	align: textAlign.center,
+	font: '75px Times',
+	fillStyle: '#ff671c',
+	antialias: false
+	});
+	fail.position.set(0, 2, 0.8);
+	fail.scale.set(0.01, 0.01, 0.01);
+	
+	grassObj.add(fail);
+	fail.visible = false;
+	//////////////////////開始畫面///////////////////////
+	
+	//-halfW*2.0611,halfW*2.0611, halfH*0.85,-halfH*0.85, -10,10)
+	
+	starbackground = new THREE.Mesh(new THREE.PlaneGeometry( halfW*4.1222, halfH*1.7, 32 ), new THREE.MeshBasicMaterial( {color: 0x1ca0ff, side: THREE.DoubleSide} ));
+	starbackground.position.set(0,0,0);
+	starbackground2 = new THREE.Mesh(new THREE.PlaneGeometry( halfW*0.9, halfH*0.85, 2048 ),new THREE.MeshBasicMaterial({
+		map: new THREE.TextureLoader().load('https://i.imgur.com/EODF3Ar.png'),
+		transparent: true,
+		side: THREE.DoubleSide,
+	}));
+	starbackground.position.set(0,0,0);
+	starbackground2.position.set(0,-halfH*0.1,0);
+	
+	if(!gamestar) {
+		starbackground.visible = true;
+		starbackground2.visible = true;
+	}
+	sceneHUD.add(starbackground,starbackground2);
+	
+	rotateToggle();
+	rotatePoke();
+	jumptoggle();
+}
+// done in markerSpace
+//
+function collision() {
+	let normal = new THREE.Vector3(0,1,0);
+	let xMp = pos.clone()
+	if (xMp.y < 0) {
+		vel.y *= -0.7;		
+	}
+}
+
+function animate() {
+	//pikachu.position.set(0,0,0);
+	stats.update();
+	requestAnimationFrame (animate);
+	if( arToolkitSource.ready === false )	return
+	arToolkitContext.update( arToolkitSource.domElement )
+	
+	renderer.clear();
+	renderer.render (scene, camera);
+	renderer.render (sceneHUD, cameraHUD);
+	button.material.visible = true;
+	buttonRing.material.visible = true;
+	origin.material.visible = false; //markerRoot.visible;
+	pointer.material.visible = false; //markerRoot.visible;
+	
+	if(gamestar){
+		mball.material.visible = markerRoot.visible;
+		mball2D.visible = markerRoot.visible;
+		bar.material.visible = markerRoot.visible;
+		barR.material.visible = markerRoot.visible;
+		barCass1.material.visible = markerRoot.visible;
+		barCass2.material.visible = markerRoot.visible;
+		barCass3.material.visible = markerRoot.visible;
+		starbackground.visible = false;
+		starbackground2.visible = false;
+	}
+	if (markerRoot.visible) {
+		origin.position.copy ( markerRoot.localToWorld (new THREE.Vector3(0,0,0)) )
+		pointer.position.copy ( markerRoot.localToWorld (new THREE.Vector3(0,0.3,0)) )
+		if (! cubeSpin) {
+//			mball.position.set (0, 1, 0);
+			/*grassL.position.y = 0.6;
+			grassL.rotation.x = 0;
+			grassR.position.y = 0.6;
+			grassR.rotation.x = 0;*/
+			caught.visible = false;
+			fail.visible = false;
+			iscatch = false;
+			mball2D_show.visible = true;
+			mball_show.visible = false;
+			mball.material.color.set(0xffffff);
+			if(mball_show) mball.visible = true;
+			else mball.visible = false;
+			
+			if(mball2D_show) mball2D_show.visible = true;
+			else mball2D.visible = false;
+			//gravity.copy (origin.position.clone().sub(pointer.position).setLength(0.21));
+			gravity.set (0, -0.21, 0);  // marker space
+			y  = mball.position.y;
+			pikachuObj.visible = true;
+			// initial velocity (marker space)
+			if(increaseV0){ ///////////////蓄力時///////////////
+				str += 0.1;
+				mball2D_show = false;
+				mball_show = true;
+				mball.rotation.x -= 0.45;
+				//console.log(bar.position.y);
+				
+				////////////計量條顏色////////////
+				if(str >= 1.0 && str <= 2.0){
+					bar.material.color.set('#1ce8ff');
+				}
+				else if(str >= 2.0 && str <= 3.0){
+					bar.material.color.set('#1ca0ff');
+				}
+				else if(str >= 3.0 && str <= 4.0){
+					bar.material.color.set('#1cffe0');
+				}
+				else if(str >= 4.0 && str <= 5.0){
+					bar.material.color.set('#1cff89');
+				}
+				else if(str >= 5.0 && str <= 6.0){
+					bar.material.color.set('#d5ff1c');
+				}
+				else if(str >= 6.0 && str <= 7.0){
+					bar.material.color.set('#ffd11c');
+				}
+				else if(str >= 7.0 && str <= 8.0){
+					bar.material.color.set('#ff761c');
+				}
+				else if(str >= 8.0 && str <= 9.0){
+					bar.material.color.set('#ff411c');
+				}
+				else if(str >= 9.0 && str < 10.0){
+					bar.material.color.set('#ff1cf7');
+				}
+				////////////計量條位置////////////
+				
+				bar.position.y = -halfH + 0.8*barL*str/10;
+				if(str > 10) str = 0;
+				////////////計算力道////////////
+				let k = 1;
+				if(str < 5) k *= str/5;
+				else if(str > 5) k *= (1+(str-5)/5);
+				else if(str === 5)k *= 1;
+				
+				vel.x = (pikachuObj.position.x - mball.position.x)*(Math.sqrt((0.2)/(2*y)))*k; //V0 = L*(G/2H)^1/2 
+				vel.y = 0;
+				vel.z = (pikachuObj.position.z - mball.position.z)*(Math.sqrt((0.2)/(2*y)))*k;
+			}
+			
+			//ball eye coord: (0, 1, -2.42);
+			let p0 = new THREE.Vector3 (0,0,-1.42);
+			let mw = new THREE.Matrix4();		
+			p0.applyMatrix4 (mw.getInverse(markerRoot.matrixWorld));
+			// convert to markerspace
+			mball.position.copy (p0);
+			pos.copy (mball.position);
+		}
+		if (cubeSpin) {  // after button pressed
+		//console.log(mball.position);
+			str = 0;
+			mball2D_show = true;
+			mball_show = false;
+			//hit
+			if((-0.25 < mball.position.x && mball.position.x < 0.25)&&
+				(0.05 <= mball.position.y && mball.position.y < 1.1)&&
+				(-0.25 < mball.position.z && mball.position.z < 0.25)&&
+				k === 1){
+				pikachuObj.visible = false;
+				iscatch = true;
+			}
+			mball.visible = true;
+			mball2D.visible = false;
+			//collision();
+			if(iscatch){
+				mball.position.set(0,0,0);
+				mball.rotation.x += 0.2;
+				mball.rotation.y += 0.2;
+				mball.material.color.set(0xff8426);
+				caught.visible = true;
+				/*if(grassL.position.y > -0.6){
+					grassL.position.y -= 0.01;
+					grassR.position.y -= 0.01;
+					if(grassL.position.y < -0.55){
+						grassL.rotation.x = Math.PI;
+						grassR.rotation.x = Math.PI;
+					}
+				}*/
+			}
+			else if(mball.position.y > 0.1){
+				mball.rotateOnAxis(rotateAxis,Math.PI/8);
+				mball.position.copy (pos);
+				mballposcy.position = mball.position;
+			}
+			else{
+				mball.position = mballposcy.position;
+				fail.visible = true;
+			}
+			let dt = 0.1; 
+			pos.add (vel.clone().multiplyScalar (dt));
+			vel.add (gravity.clone().multiplyScalar(dt));
+			//$('#ratio').text (pos.y.toFixed(2))
+			bar.position.y = (-halfH + 0.8*barL);
+			bar.material.color.set('#1ca0ff');
+		}
+	}	
+		
+	//let pikachu face on camera
+	let p0 = new THREE.Vector3 (0,0,0)
+	let mw = new THREE.Matrix4();		
+	p0.applyMatrix4 (mw.getInverse(markerRoot.matrixWorld));
+	
+	p0.y = 0;
+	let front = new THREE.Vector3(0,0,1);
+	let angle = p0.angleTo (front);
+	let axis = new THREE.Vector3();
+	axis.crossVectors ( front, p0 ).normalize();
+
+	if (axis.y > 0){  // 0, 1, 0
+		pikachuObj.rotation.y = angle;
+		grassObj.rotation.y = angle;
+		mball.rotation.y = angle - Math.PI/2;
+	}else {
+		pikachuObj.rotation.y = -angle;
+		grassObj.rotation.y = -angle;
+		mball.rotation.y = -angle - Math.PI/2;
+	}
+	////////////////////jumpPoke///////////////////////
+	if(k === 0){
+		pikachu.position.x = -1;
+	}
+	else if(k === 1){
+		pikachu.position.x = 0;
+	}
+	else if(k === 2){
+		pikachu.position.x = 1;
+	}
+}
+	
+function onResize(){
+	arToolkitSource.onResize()	
+	arToolkitSource.copySizeTo(renderer.domElement)	
+	if( arToolkitContext.arController !== null ){
+		arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)	
+	}	
+	
+	whRatio = window.innerWidth/window.innerHeight;
+	 halfW = halfH * whRatio;
+	cameraHUD.left = -halfW;
+	cameraHUD.right = halfW;
+	//cameraHUD.updateProjectionMatrix();
+	cameraHUD.autoUpdate = false;
+	//$('#ratio').text ('W/H ratio: ' + whRatio.toFixed(2))
+	
+}
+	
+function pickCompute (ndcX, ndcY) {
+
+	// use 2D algorithm 	
+	let dist = button1.d2To ([halfW * ndcX, halfH * ndcY]);	
+	//$('#ratio').text ('Mouse-to-Button: ' + dist.toFixed(2))
+	if (dist < button1.size) {
+		console.log ('picked')
+		isclick = true;
+		if(gamestar === true)increaseV0 = true
+	} else {
+		console.log ('no hit')
+	}
+
+}
+
+function onMouseDown (event) {
+	console.log ('in mouse down')
+	event.preventDefault();
+	let ndcX = (event.clientX / window.innerWidth) * 2 - 1;
+	let ndcY = -(event.clientY / window.innerHeight) * 2 + 1;
+	pickCompute (ndcX, ndcY);
+	if(isclick === true) button.material.color.set(0xff891c);
+}	
+
+function onMouseUp() {
+	if(increaseV0 === true){
+		cubeSpin = !cubeSpin;//判斷有無onMouseDown
+		button.material.color.set(0xff3a1c);
+	}
+	if(isclick === true) gamestar = true;
+	increaseV0 = false;
+	isclick = false;
+}
+
+function onDocumentTouchStart (event) {
+	console.log ('in touch start');
+	if(isclick === true) button.material.color.set(0xff891c);
+   if (event.touches.length == 1) {
+		event.preventDefault();
+		let ndcX = ( event.touches[0].pageX / window.innerWidth ) * 2 - 1;
+		let ndcY = - ( event.touches[0].pageY / window.innerHeight ) * 2 + 1;
+		pickCompute (ndcX, ndcY);
+		if(isclick === true) button.material.color.set(0xff891c);		
+	}	
+}
+function  onDocumentTouchEnd() {
+	console.log ('touch end');
+	if(increaseV0 === true){
+		cubeSpin = !cubeSpin;//判斷有無onMouseDown
+		button.material.color.set(0xff3a1c);
+	}
+	if(isclick === true) gamestar = true;
+	increaseV0 = false;
+	isclick = false;
+}
+
+function unitize (object, targetSize) {
+	
+	// find bounding box of 'object'
+	var box3 = new THREE.Box3();
+	box3.setFromObject (object);
+	var size = new THREE.Vector3();
+	size.subVectors (box3.max, box3.min);
+	var center = new THREE.Vector3();
+	center.addVectors(box3.max, box3.min).multiplyScalar (0.5);
+	
+	console.log ('center: ' + center.x + ', '+center.y + ', '+center.z );
+	console.log ('size: ' + size.x + ', ' +  size.y + ', '+size.z );
+	
+	// uniform scaling according to objSize
+	var objSize = findMax (size);
+	var scaleSet = targetSize/objSize;
+				
+	var theObject =  new THREE.Object3D();
+	theObject.add (object);
+	object.scale.set (scaleSet, scaleSet, scaleSet);
+	object.position.set (-center.x*scaleSet, -center.y*scaleSet + size.y/2*scaleSet, -center.z*scaleSet);
+	
+	return theObject;
+	
+	
+	// helper function
+	function findMax(v) {
+		if (v.x > v.y) {
+			return v.x > v.z ? v.x : v.z;
+		} else { // v.y > v.x
+			return v.y > v.z ? v.y : v.z;
+		} 
+	}
+			
+}
+</script>
+</body>

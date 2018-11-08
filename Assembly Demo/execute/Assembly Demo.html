@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='vendor/three.js/build/three.js'></script>
+<script src="vendor/three.js/examples/js/libs/stats.min.js"></script>
+<!-- jsartookit -->
+<script src="../vendor/jsartoolkit5/build/artoolkit.min.js"></script>
+<script src="../vendor/jsartoolkit5/js/artoolkit.api.js"></script>
+<!-- include threex.artoolkit -->
+<script src="../src/threex/threex-artoolkitsource.js"></script>
+<script src="../src/threex/threex-artoolkitcontext.js"></script>
+<script src="../src/threex/threex-arbasecontrols.js"></script>
+<script src="../src/threex/threex-armarkercontrols.js"></script> 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/88/three.min.js"></script>
+<script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+<script src="https://jyunming-chen.github.io/tutsplus/js/KeyboardState.js"></script>
+<script src="https://rawgit.com/jyunming-chen/tutsplus/master/js/text2D.js"></script>
+<script>THREEx.ArToolkitContext.baseURL = '../'</script>
+
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'><div style='position: absolute; top: 10px; width:100%; text-align: center; z-index: 1;'>
+	<!-- <a href="https://github.com/jeromeetienne/AR.js/" target="_blank">AR.js</a> - three.js mobile performance
+	<br/>
+	Code by <a href="https://twitter.com/snigelpaogat" target='_blank'>Fredrik Blomqvist</a> and 
+	<a href='https://twitter.com/jerome_etienne' target='_blank'>@jerome_etienne</a>--> 
+</div><script>
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Init
+	//////////////////////////////////////////////////////////////////////////////////
+	var alpha = 0,alpha2 = 0,alpha3 = 0,alpha4 = 0;
+	var sign = 1;
+	var quat1, quat2;
+	var c1pos1, c1pos2 , c2pos1, c2pos2 , c3pos1, c3pos2 , c4pos1, c4pos2, c5pos1, c5pos2, c6pos1, c6pos2;
+	var s1pos1, s1pos2, s2pos1, s2pos2, s3pos1, s3pos2, s4pos1, s4pos2;
+	var cube1,cube2,cube3,cube4,cube5,cube6;
+	var screws1,screws2,screws3,screws4;
+	var plane = new THREE.Object3D();
+	var plane2 = new THREE.Object3D();
+	var plane3 = new THREE.Object3D();
+	var text,text2,text3;
+	var move = 0;
+	// init renderer
+	var renderer	= new THREE.WebGLRenderer({
+		// antialias	: true,
+		alpha: true
+	});
+	// renderer.shadowMap.type = THREE.BasicShadowMap
+	// renderer.shadowMap.type = THREE.PCFShadowMap;
+	renderer.shadowMap.type = THREE.PCFSoftShadowMap
+	renderer.shadowMap.enabled = true;
+
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+	// renderer.setPixelRatio( 1/2 );
+
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.domElement.style.position = 'absolute'
+	renderer.domElement.style.top = '0px'
+	renderer.domElement.style.left = '0px'
+	document.body.appendChild( renderer.domElement );
+
+	// for multi-pass rendering
+	renderer.autoClear = false;
+	
+	// array of functions for the rendering loop
+	var onRenderFcts= [];
+
+	// init scene and camera
+	var scene	= new THREE.Scene();
+
+	var ambient = new THREE.AmbientLight( 0x666666 );
+	scene.add( ambient );
+
+	var directionalLight = new THREE.DirectionalLight( 'white' );
+	directionalLight.position.set( 1, 2, 0.3 ).setLength(2)
+	directionalLight.shadow.mapSize.set(128,128)
+	directionalLight.shadow.camera.bottom = -0.6
+	directionalLight.shadow.camera.top = 0.6
+	directionalLight.shadow.camera.right = 0.6
+	directionalLight.shadow.camera.left = -0.6
+	directionalLight.castShadow = true;
+	// scene.add(new THREE.CameraHelper( directionalLight.shadow.camera ))
+	scene.add( directionalLight );
+	
+	////////////////////////////////picking////////////////////////////////
+	var raycaster = new THREE.Raycaster();
+	var mouse = new THREE.Vector2();
+	var pickables = [];
+	// for HUD scene
+	var sceneHUD = new THREE.Scene();
+	var cameraHUD = new THREE.OrthographicCamera (-10,10,10,-10, -10,10);
+	
+	window.addEventListener ('mousedown', onMouseDown, false);
+	
+	function onMouseDown (event) {
+		event.preventDefault();
+  		mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  		mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+		
+		// find intersections (only pick the HUD scene, using OrthographicCamera)  		
+  		raycaster.setFromCamera(mouse, cameraHUD);
+		
+  		var intersects = raycaster.intersectObjects(pickables);
+		
+		if(intersects.length > 0){
+			if (intersects[0].object.name === 0) {
+				console.log ('picked')
+				if(move < 3)
+					move += 1;
+				else{
+					move = 0;
+					alpha = 0;
+					alpha2 = 0;
+					alpha3 = 0;
+					alpha4 = 0;
+					cube5.visible = false;
+					cube6.visible = false;
+					screws1.visible = false;
+					screws2.visible = false;
+					screws3.visible = false;
+					screws4.visible = false;
+				}
+			} else if (intersects[0].object.name === 1){
+				console.log ('picked');
+				if(alpha4 != 0) alpha4 =0;
+				if(alpha3 != 0) alpha3 =0;
+				if(alpha2 != 0) alpha2 =0;
+				if(alpha != 0)  alpha =0;
+				
+			} else if (intersects[0].object.name === 2){
+				console.log ('picked');
+				if(move > 0) move--;
+				if(move === 2) alpha3 = 0;
+				if(move === 1) alpha2 = 0;
+				if(move === 0) alpha = 0;
+				
+			} else {
+				console.log ('no hit');
+			}
+		}	
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Initialize a basic camera
+	//////////////////////////////////////////////////////////////////////////////////
+
+	// Create a camera
+	var camera = new THREE.Camera();
+	scene.add(camera);
+
+	////////////////////////////////////////////////////////////////////////////////
+	//          handle arToolkitSource
+	////////////////////////////////////////////////////////////////////////////////
+
+	var arToolkitSource = new THREEx.ArToolkitSource({
+		// to read from the webcam
+		sourceType : 'webcam',
+
+		// to read from an image
+		// sourceType : 'image',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/images/img.jpg',
+
+		// to read from a video
+		// sourceType : 'video',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/videos/headtracking.mp4',
+	})
+
+	arToolkitSource.init(function onReady(){
+		onResize()
+	})
+	
+	// handle resize
+	window.addEventListener('resize', function(){
+		onResize()
+	})
+	function onResize(){
+		arToolkitSource.onResize()	
+		arToolkitSource.copySizeTo(renderer.domElement)	
+		if( arToolkitContext.arController !== null ){
+			arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)	
+		}	
+	}
+	////////////////////////////////////////////////////////////////////////////////
+	//          initialize arToolkitContext
+	////////////////////////////////////////////////////////////////////////////////
+
+
+	// create atToolkitContext
+	var arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: THREEx.ArToolkitContext.baseURL + '../data/data/camera_para.dat',
+		detectionMode: 'mono',
+		maxDetectionRate: 30,
+		canvasWidth: 80*3,
+		canvasHeight: 60*3,
+	})
+	// initialize it
+	arToolkitContext.init(function onCompleted(){
+		// copy projection matrix to camera
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	})
+
+	// update artoolkit on every frame
+	onRenderFcts.push(function(){
+		if( arToolkitSource.ready === false )	return
+
+		arToolkitContext.update( arToolkitSource.domElement )
+		
+		// update scene.visible if the marker is seen
+		scene.visible = camera.visible
+	})
+
+
+	////////////////////////////////////////////////////////////////////////////////
+	//          Create a ArMarkerControls
+	////////////////////////////////////////////////////////////////////////////////
+	var markerRoot = new THREE.Group
+	scene.add(markerRoot)
+	var markerControls = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+		type : 'pattern',
+		patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/patt.hiro',
+		// patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/patt.kanji',
+	})
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		add an object in the scene
+	//////////////////////////////////////////////////////////////////////////////////
+
+	
+	
+	// add a torus knot
+	// var geometry	= new THREE.CubeGeometry(1,1,1);
+	// var material	= new THREE.MeshNormalMaterial({
+	// 	transparent : true,
+	// 	opacity: 0.5,
+	// 	side: THREE.DoubleSide
+	// });
+	// var mesh	= new THREE.Mesh( geometry, material );
+	// mesh.position.y	= geometry.parameters.height/2
+	// markerRoot.add( mesh );
+
+	;(function(){
+	/////////////////////////////////////Build table////////////////////////////////////////////////
+		var cube = new THREE.Mesh( new THREE.BoxGeometry( 0.245, 2.7, 0.245), new THREE.MeshLambertMaterial({
+			map: new THREE.TextureLoader().load('https://i.imgur.com/RszPUa2.jpg'),
+		  }));
+		cube.castShadow = true;
+		cube.receiveShadow = true;
+		cube1 = cube.clone();
+		cube2 = cube.clone();
+		cube3 = cube.clone();
+		cube4 = cube.clone();
+		cube5 = new THREE.Mesh( new THREE.BoxGeometry( 2.945, 0.245, 2.945), new THREE.MeshLambertMaterial({
+			map: new THREE.TextureLoader().load('https://i.imgur.com/RszPUa2.jpg'),
+		  }));
+		cube6 = new THREE.Mesh( new THREE.BoxGeometry( 2.945, 3.31, 0.245), new THREE.MeshLambertMaterial({
+			map: new THREE.TextureLoader().load('https://i.imgur.com/RszPUa2.jpg'),
+		  }));
+		markerRoot.add( cube1,cube2,cube3,cube4,cube5,cube6);
+		cube5.visible = false;
+		cube6.visible = false;
+		directionalLight.target = cube1;
+		
+		// add a transparent ground-plane shadow-receiver
+		var material = new THREE.ShadowMaterial();
+		material.opacity = 0.7; //! bug in threejs. can't set in constructor
+
+		var geometry = new THREE.PlaneGeometry(3, 3)//影子成像的地方
+		var planeMesh = new THREE.Mesh( geometry, material);
+		planeMesh.receiveShadow = true;
+		planeMesh.depthWrite = false;
+		planeMesh.rotation.x = -Math.PI/2
+		markerRoot.add(planeMesh);
+		
+		var geometry = new THREE.CylinderGeometry( 0.025, 0.025, 0.245, 32 );
+		var material = new THREE.MeshBasicMaterial( {color: 0x45e7ef} );
+		var screws = new THREE.Mesh( geometry, material );
+		//screws.rotation.z = Math.PI/2;
+		var geometry = new THREE.CylinderGeometry( 0.025, 0.025, 0.5, 32 );
+		var material = new THREE.MeshBasicMaterial( {color: 0x45e7ef} );
+		var screwslong = new THREE.Mesh( geometry, material );
+		screws1 = screwslong.clone();
+		screws2 = screwslong.clone();
+		screws3 = screws.clone();
+		screws4 = screws.clone();
+		markerRoot.add(screws1,screws2,screws3,screws4);
+		screws1.visible = false;
+		screws2.visible = false;
+		screws3.visible = false;
+		screws4.visible = false;
+		
+	})()
+	
+	//////////////////////build button//////////////////////
+	var button = new THREE.Group
+	var button2 = new THREE.Group
+	var button3 = new THREE.Group
+	var Text2D = THREE_Text.MeshText2D;
+	var SpriteText2D = THREE_Text.SpriteText2D;
+	var textAlign = THREE_Text.textAlign;
+
+	text = new Text2D("Next Step", {
+	align: textAlign.center,
+	font: '30px Times',
+	fillStyle: '#000000',
+	antialias: false
+	});
+	text.position.set(0, 0.4, 1);
+	text.scale.set(0.015, 0.02, 0.015);
+	
+	text2 = new Text2D("Repeat", {
+	align: textAlign.center,
+	font: '30px Times',
+	fillStyle: '#000000',
+	antialias: false
+	});
+	text2.position.set(0, 0.4, 1);
+	text2.scale.set(0.015, 0.02, 0.015);
+	
+	text3 = new Text2D("Previous", {
+	align: textAlign.center,
+	font: '30px Times',
+	fillStyle: '#000000',
+	antialias: false
+	});
+	text3.position.set(0, 0.4, 1);
+	text3.scale.set(0.015, 0.02, 0.015);
+	var geometry = new THREE.PlaneGeometry( 2, 1, 32 );
+	var material = new THREE.MeshBasicMaterial( {color: 0x95e5f9, side: THREE.DoubleSide} );
+	plane = new THREE.Mesh( geometry, material );
+	plane.name = 0;
+	
+	plane2 = new THREE.Mesh( geometry, material );
+	plane2.name = 1;
+	
+	plane3 = new THREE.Mesh( geometry, material );
+	plane3.name = 2;
+	
+	button.add( text);
+	plane.position.set(4,-5,0);
+	button.position.set(4,-5,0);
+	
+	button2.add( text2, plane2);
+	button2.position.set(0,-5,0);
+	
+	button3.add( text3, plane3);
+	button3.position.set(-4,-5,0);
+	
+	pickables.push (plane,plane2,plane3);//something wrong here
+	sceneHUD.add(button,button2,button3,plane);
+	
+	
+	
+	//////////////////////for lerp//////////////////////
+	c1pos1 = new THREE.Vector3(-1.35,2.5,-1.35);
+	c1pos2 = new THREE.Vector3(-1.35,1.35,-1.35);
+	
+	c2pos1 = new THREE.Vector3(1.35,3.0,-1.35);
+	c2pos2 = new THREE.Vector3(1.35,1.35,-1.35);
+	
+	c3pos1 = new THREE.Vector3(-1.35,3.5,1.35);
+	c3pos2 = new THREE.Vector3(-1.35,1.35,1.35);
+	
+	c4pos1 = new THREE.Vector3(1.35,4.0,1.35);
+	c4pos2 = new THREE.Vector3(1.35,1.35,1.35);
+	
+	c5pos1 = new THREE.Vector3(0,4.0,0);
+	c5pos2 = new THREE.Vector3(0,2.8225,0);
+	
+	c6pos1 = new THREE.Vector3(0,5.5,-1.35);
+	c6pos2 = new THREE.Vector3(0,4.6,-1.35);
+	
+	s1pos1 = new THREE.Vector3(-1.35,3.2,-1.35);
+	s1pos2 = new THREE.Vector3(-1.35,2.8225,-1.35);
+	
+	s2pos1 = new THREE.Vector3(1.35,3.4,-1.35);
+	s2pos2 = new THREE.Vector3(1.35,2.8225,-1.35);
+	
+	s3pos1 = new THREE.Vector3(-1.35,3.6,1.35);
+	s3pos2 = new THREE.Vector3(-1.35,2.8225,1.35);
+	
+	s4pos1 = new THREE.Vector3(1.35,3.8,1.35);
+	s4pos2 = new THREE.Vector3(1.35,2.8225,1.35);
+	
+	
+	s5pos1 = new THREE.Vector3(0.8,0.95,0.2);
+	s5pos2 = new THREE.Vector3(0.45,0.95,0.2);
+	
+	s6pos1 = new THREE.Vector3(0.8,0.95,-0.2);
+	s6pos2 = new THREE.Vector3(0.45,0.95,-0.2);
+	
+	s7pos1 = new THREE.Vector3(0.8,0.75,0.2);
+	s7pos2 = new THREE.Vector3(0.45,0.75,0.2);
+	
+	s8pos1 = new THREE.Vector3(0.8,0.75,-0.2);
+	s8pos2 = new THREE.Vector3(0.45,0.75,-0.2);
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		render the whole thing on the page
+	//////////////////////////////////////////////////////////////////////////////////
+	var stats = new Stats();
+	document.body.appendChild( stats.dom );
+	// render the scene
+	onRenderFcts.push(function(){
+		renderer.clear();
+		
+		renderer.render( scene, camera );
+		plane.material.visible = markerRoot.visible;//SO 重 要
+		plane2.material.visible = markerRoot.visible;//SO 重 要
+		plane3.material.visible = markerRoot.visible;//SO 重 要
+		text.material.visible = markerRoot.visible;//SO 重 要
+		text2.material.visible = markerRoot.visible;//SO 重 要
+		text3.material.visible = markerRoot.visible;//SO 重 要
+		renderer.render (sceneHUD, cameraHUD);
+		
+		stats.update();
+	})
+
+	// run the rendering loop
+	var lastTimeMsec= null
+	requestAnimationFrame(function animate(nowMsec){//動畫animate
+		///////////////////爆炸animate///////////////////
+		if (alpha <= 1)
+			alpha += 0.01*sign;
+		if (alpha2 <= 1 && move === 1) 
+			alpha2 += 0.01*sign;
+		if (alpha3 <= 1 && move === 2)
+			alpha3 += 0.01*sign;
+		if (alpha4 <= 1 && move === 3)
+			alpha4 += 0.01*sign;
+		
+		if(move === 0){
+			cube5.visible = false;
+			cube6.visible = false;
+			screws1.visible = false;
+			screws2.visible = false;
+			screws3.visible = false;
+			screws4.visible = false;
+			var pp = c1pos1.clone();
+			pp.lerp (c1pos2, alpha);
+			cube1.position.copy (pp);
+			var pp2 = c2pos1.clone();
+			pp2.lerp (c2pos2, alpha);
+			cube2.position.copy (pp2);
+			var pp3 = c3pos1.clone();
+			pp3.lerp (c3pos2, alpha);
+			cube3.position.copy (pp3);
+			var pp4 = c4pos1.clone();
+			pp4.lerp (c4pos2, alpha);
+			cube4.position.copy (pp4);
+		}
+		if(move === 1){
+			cube6.visible = false;
+			screws1.visible = false;
+			screws2.visible = false;
+			screws3.visible = false;
+			screws4.visible = false;
+			cube1.position.copy(c1pos2);
+			cube2.position.copy(c2pos2);
+			cube3.position.copy(c3pos2);
+			cube4.position.copy(c4pos2);
+			cube5.visible = true;
+			var pp = c5pos1.clone();
+			pp.lerp (c5pos2, alpha2);
+			cube5.position.copy (pp);			
+		}
+		if(move === 2){
+			cube6.visible = false;
+			cube1.position.copy(c1pos2);
+			cube2.position.copy(c2pos2);
+			cube3.position.copy(c3pos2);
+			cube4.position.copy(c4pos2);
+			cube5.position.copy(c5pos2);
+			screws1.visible = true;
+			screws2.visible = true;
+			screws3.visible = true;
+			screws4.visible = true;
+			var pp = s1pos1.clone();
+			pp.lerp (s1pos2, alpha3);
+			screws1.position.copy (pp);
+			var pp2 = s2pos1.clone();
+			pp2.lerp (s2pos2, alpha3);
+			screws2.position.copy (pp2);	
+			var pp3 = s3pos1.clone();
+			pp3.lerp (s3pos2, alpha3);
+			screws3.position.copy (pp3);	
+			var pp4 = s4pos1.clone();
+			pp4.lerp (s4pos2, alpha3);
+			screws4.position.copy (pp4);	
+		}
+		if(move === 3){
+		
+			cube1.position.copy(c1pos2);
+			cube2.position.copy(c2pos2);
+			cube3.position.copy(c3pos2);
+			cube4.position.copy(c4pos2);
+			cube5.position.copy(c5pos2);
+			screws1.position.copy(s1pos2);
+			screws2.position.copy(s2pos2);
+			screws3.position.copy(s3pos2);
+			screws4.position.copy(s4pos2);
+			cube6.visible = true;
+			var pp = c6pos1.clone();
+			pp.lerp (c6pos2, alpha4);
+			cube6.position.copy (pp);			
+		}
+		
+		
+	
+	
+		// keep looping
+		requestAnimationFrame( animate );
+		// measure time
+		lastTimeMsec	= lastTimeMsec || nowMsec-1000/60
+		var deltaMsec	= Math.min(200, nowMsec - lastTimeMsec)
+		lastTimeMsec	= nowMsec
+		// call each update function
+		onRenderFcts.forEach(function(onRenderFct){//需要更新的"事件"
+			onRenderFct(deltaMsec/1000, nowMsec/1000)
+		})
+	})
+</script></body>
